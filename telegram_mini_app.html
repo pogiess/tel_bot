@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Channel Hub</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #000000);
+            line-height: 1.4;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 0;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--tg-theme-button-color, #007bff), #0056b3);
+            padding: 24px 16px;
+            color: white;
+            text-align: center;
+            position: relative;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 6px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 15px;
+            font-weight: 400;
+        }
+
+        .refresh-indicator {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-size: 11px;
+            opacity: 0.8;
+            transition: opacity 0.3s;
+        }
+
+        .refresh-indicator.active {
+            opacity: 1;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .tabs {
+            display: flex;
+            background: var(--tg-theme-secondary-bg-color, #f8f9fa);
+            border-bottom: 1px solid var(--tg-theme-hint-color, #e0e0e0);
+            overflow-x: auto;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        .tab {
+            flex: 1;
+            padding: 16px 12px;
+            text-align: center;
+            cursor: pointer;
+            border: none;
+            background: none;
+            color: var(--tg-theme-hint-color, #666);
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+            min-width: 90px;
+            position: relative;
+        }
+
+        .tab:hover {
+            background: rgba(0, 123, 255, 0.05);
+        }
+
+        .tab.active {
+            color: var(--tg-theme-button-color, #007bff);
+            background: rgba(0, 123, 255, 0.08);
+        }
+
+        .tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--tg-theme-button-color, #007bff), #0056b3);
+            border-radius: 2px 2px 0 0;
+        }
+
+        .content {
+            padding: 20px 16px;
+            min-height: calc(100vh - 180px);
+        }
+
+        .post {
+            background: var(--tg-theme-secondary-bg-color, #f8f9fa);
+            border-radius: 20px;
+            margin-bottom: 24px;
+            overflow: hidden;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+            border: 1px solid rgba(0,0,0,0.04);
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .post:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+        }
+
+        .post.urgent::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #e74c3c, #c0392b);
+        }
+
+        .post.high::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #f39c12, #e67e22);
+        }
+
+        .post-header {
+            padding: 18px 20px;
+            border-bottom: 1px solid rgba(0,0,0,0.06);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255,255,255,0.5);
+        }
+
+        .post-type {
+            background: linear-gradient(135deg, var(--tg-theme-button-color, #007bff), #0056b3);
+            color: white;
+            padding: 8px 14px;
+            border-radius: 25px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            box-shadow: 0 2px 8px rgba(0,123,255,0.3);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .post-type.urgent {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+        }
+
+        .post-type.high {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+        }
+
+        .post-date {
+            color: var(--tg-theme-hint-color, #666);
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .post-content {
+            padding: 24px 20px;
+        }
+
+        .post-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 14px;
+            line-height: 1.3;
+            color: var(--tg-theme-text-color, #000);
+        }
+
+        .post-text {
+            margin-bottom: 18px;
+            line-height: 1.7;
+            color: var(--tg-theme-text-color, #333);
+            font-size: 15px;
+        }
+
+        .post-media {
+            width: 100%;
+            max-height: 450px;
+            object-fit: cover;
+            border-radius: 16px;
+            margin-bottom: 18px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+            transition: transform 0.3s ease;
+        }
+
+        .post-media:hover {
+            transform: scale(1.02);
+        }
+
+        .post-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 18px 20px;
+            border-top: 1px solid rgba(0,0,0,0.06);
+            background: rgba(0,0,0,0.02);
+        }
+
+        .like-dislike {
+            display: flex;
+            gap: 24px;
+        }
+
+        .action-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: none;
+            border: none;
+            color: var(--tg-theme-hint-color, #666);
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 600;
+            padding: 10px 16px;
+            border-radius: 25px;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .action-btn:hover {
+            background: rgba(0,0,0,0.06);
+            transform: translateY(-1px);
+        }
+
+        .action-btn.liked {
+            background: rgba(0, 123, 255, 0.12);
+            color: var(--tg-theme-button-color, #007bff);
+            box-shadow: 0 2px 8px rgba(0,123,255,0.2);
+        }
+
+        .action-btn.disliked {
+            background: rgba(255, 59, 48, 0.12);
+            color: #ff3b30;
+            box-shadow: 0 2px 8px rgba(255,59,48,0.2);
+        }
+
+        .action-btn.share {
+            background: rgba(52, 152, 219, 0.08);
+            color: #3498db;
+        }
+
+        .action-btn.share:hover {
+            background: rgba(52, 152, 219, 0.15);
+        }
+
+        .post-stats {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-size: 13px;
+            color: var(--tg-theme-hint-color, #666);
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            color: var(--tg-theme-hint-color, #666);
+        }
+
+        .empty-state-icon {
+            font-size: 72px;
+            margin-bottom: 24px;
+            opacity: 0.6;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .empty-state h3 {
+            font-size: 22px;
+            margin-bottom: 10px;
+            color: var(--tg-theme-text-color, #333);
+            font-weight: 600;
+        }
+
+        .empty-state p {
+            font-size: 16px;
+            opacity: 0.8;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--tg-theme-hint-color, #666);
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid var(--tg-theme-button-color, #007bff);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--tg-theme-button-color, #007bff);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-size: 14px;
+            font-weight: 600;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0,123,255,0.3);
+        }
+
+        .notification.show {
+            opacity: 1;
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                padding: 20px 16px;
+            }
+            
+            .header h1 {
+                font-size: 20px;
+            }
+
+            .post {
+                margin-bottom: 20px;
+                border-radius: 16px;
+            }
+
+            .post-content {
+                padding: 20px 16px;
+            }
+
+            .post-actions {
+                padding: 16px;
+                flex-direction: column;
+                gap: 16px;
+                align-items: stretch;
+            }
+
+            .like-dislike {
+                justify-content: center;
+            }
+
+            .post-stats {
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .content {
+                padding: 16px 12px;
+            }
+
+            .tabs {
+                padding: 0 8px;
+            }
+
+            .tab {
+                min-width: 70px;
+                font-size: 13px;
+                padding: 14px 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="refresh-indicator" id="refreshIndicator">🔄 Live</div>
+            <h1>📢 Channel Hub</h1>
+            <p>Stay updated with our latest content</p>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" data-tab="news">📰 News</button>
+            <button class="tab" data-tab="videos">🎥 Videos</button>
+            <button class="tab" data-tab="pictures">🖼️ Pictures</button>
+            <button class="tab" data-tab="news-pictures">📸 News + Pics</button>
+        </div>
+
+        <div class="content">
+            <div id="news-content" class="tab-content">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                    <p>Loading latest news...</p>
+                </div>
+            </div>
+
+            <div id="videos-content" class="tab-content hidden">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                    <p>Loading videos...</p>
+                </div>
+            </div>
+
+            <div id="pictures-content" class="tab-content hidden">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                    <p>Loading pictures...</p>
+                </div>
+            </div>
+
+            <div id="news-pictures-content" class="tab-content hidden">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                    <p>Loading news with pictures...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="notification" class="notification"></div>
+
+    <script>
+        // Initialize Telegram Web App
+        let tg = null;
+        if (window.Telegram && window.Telegram.WebApp) {
+            tg = window.Telegram.WebApp;
+            tg.ready();
+            tg.expand();
+            tg.enableClosingConfirmation();
+        }
+
+        // Global variables
+        let currentTab = 'news';
+        let posts = {
+            news: [],
+            videos: [],
+            pictures: [],
+            'news-pictures': []
+        };
+        let isLoading = false;
+        let lastUpdateTime = null;
+
+        // API Configuration (Replace with your actual API endpoints)
+        const API_BASE_URL = 'https://your-server.com/api';
+        const API_ENDPOINTS = {
+            posts: `${API_BASE_URL}/posts`,
+            like: `${API_BASE_URL}/posts/like`,
+            stats: `${API_BASE_URL}/posts/stats`
+        };
+
+        // Load posts from server
+        async function loadPosts(category = null) {
+            try {
+                setLoading(true);
+                
+                // In production, replace with actual API call
+                // const response = await fetch(`${API_ENDPOINTS.posts}${category ? `?category=${category}` : ''}`);
+                // const data = await response.json();
+                
+                // For demo, load sample data
+                await loadSampleData();
+                
+                lastUpdateTime = new Date();
+                setLoading(false);
+                renderPosts();
+                
+            } catch (error) {
+                console.error('Error loading posts:', error);
+                setLoading(false);
+                showNotification('Failed to load content. Please try again.', 'error');
+            }
+        }
+
+        // Load sample data (replace with actual API calls)
+        async function loadSampleData() {
+            return new Promise((resolve) => {
+                setTimeout(() => {
+                    if (posts.news.length === 0) {
+                        posts.news = [
+                            {
+                                id: 1,
+                                title: "🚀 Major Platform Update Released!",
+                                description: "We're excited to announce our biggest update yet! New features include enhanced security, improved performance, and a completely redesigned user interface. This update represents months of hard work from our development team.",
+                                date: new Date().toISOString(),
+                                likes: 127,
+                                dislikes: 3,
+                                userLiked: false,
+                                userDisliked: false,
+                                views: 1543,
+                                priority: 'urgent'
+                            },
+                            {
+                                id: 2,
+                                title: "Weekly Community Highlights",
+                                description: "Check out the amazing contributions from our community this week. From innovative solutions to creative content, our members continue to inspire us every day.",
+                                date: new Date(Date.now() - 86400000).toISOString(),
+                                likes: 84,
+                                dislikes: 1,
+                                userLiked: false,
+                                userDisliked: false,
+                                views: 892,
+                                priority: 'high'
+                            }
+                        ];
+
+                        posts.videos = [
+                            {
+                                id: 3,
+                                title: "🎬 Platform Tutorial: Getting Started",
+                                description: "A comprehensive guide to help new users navigate our platform effectively. Learn about all the key features and tips for success.",
+                                mediaUrl: "https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4",
+                                date: new Date(Date.now() - 172800000).toISOString(),
+                                likes: 156,
+                                dislikes: 4,
+                                userLiked: false,
+                                userDisliked: false,
+                                views: 2341,
+                                priority: 'high'
+                            }
+                        ];
+
+                        posts.pictures = [
+                            {
+                                id: 4,
+                                title: "📸 Behind the Scenes: Office Tour",
+                                description: "Take a peek behind the curtain! Here's a glimpse of where the magic happens - our team workspace and creative environment.",
+                                mediaUrl: "https://picsum.photos/800/600?random=1",
+                                date: new Date(Date.now() - 259200000).toISOString(),
+                                likes: 203,
+                                dislikes: 2,
+                                userLiked: false,
+                                userDisliked: false,
+                                views: 1876,
+                                priority: 'normal'
+                            }
+                        ];
+
+                        posts['news-pictures'] = [
+                            {
+                                id: 5,
+                                title: "🏆 Team Achievement Celebration",
+                                description: "We're proud to announce that our team has won the Innovation Award 2024! This recognition validates our commitment to excellence and innovation in everything we do.",
+                                mediaUrl: "https://picsum.photos/800/500?random=2",
+                                date: new Date(Date.now() - 345600000).toISOString(),
+                                likes: 312,
+                                dislikes: 1,
+                                userLiked: false,
+                                userDisliked: false,
+                                views: 2654,
+                                priority: 'urgent'
+                            }
+                        ];
+                    }
+                    resolve();
+                }, 1500); // Simulate network delay
+            });
+        }
+
+        // Set loading state
+        function setLoading(loading) {
+            isLoading = loading;
+            const refreshIndicator = document.getElementById('refreshIndicator');
+            
+            if (loading) {
+                refreshIndicator.classList.add('active');
+                refreshIndicator.textContent = '🔄 Loading...';
+            } else {
+                refreshIndicator.classList.remove('active');
+                refreshIndicator.textContent = '🔄 Live';
+            }
+        }
+
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const tabName = tab.dataset.tab;
+                switchTab(tabName);
+            });
+        });
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.add('hidden');
+            });
+
+            document.getElementById(`${tabName}-content`).classList.remove('hidden');
+            currentTab = tabName;
+
+            renderPosts();
+        }
+
+        // Render posts for current tab
+        function renderPosts() {
+            const container = document.getElementById(`${currentTab}-content`);
+            const tabPosts = posts[currentTab];
+
+            if (isLoading) {
+                container.innerHTML = getLoadingHTML();
+                return;
+            }
+
+            if (tabPosts.length === 0) {
+                container.innerHTML = getEmptyState(currentTab);
+                return;
+            }
+
+            // Sort posts by priority and date
+            const sortedPosts = [...tabPosts].sort((a, b) => {
+                const priorityOrder = { 'urgent': 3, 'high': 2, 'normal': 1 };
+                if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
+                    return priorityOrder[b.priority] - priorityOrder[a.priority];
+                }
+                return new Date(b.date) - new Date(a.date);
+            });
+
+            container.innerHTML = sortedPosts.map(post => createPostHTML(post)).join('');
+        }
+
+        function getLoadingHTML() {
+            return `
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                    <p>Loading content...</p>
+                </div>
+            `;
+        }
+
+        function getEmptyState(tab) {
+            const states = {
+                'news': { icon: '📰', title: 'No news yet', desc: 'New articles will appear here soon' },
+                'videos': { icon: '🎥', title: 'No videos yet', desc: 'Video content coming soon' },
+                'pictures': { icon: '🖼️', title: 'No pictures yet', desc: 'Photo galleries will be added soon' },
+                'news-pictures': { icon: '📸', title: 'No illustrated news yet', desc: 'News with images coming soon' }
+            };
+
+            const state = states[tab];
+            return `
+                <div class="empty-state">
+                    <div class="empty-state-icon">${state.icon}</div>
+                    <h3>${state.title}</h3>
+                    <p>${state.desc}</p>
+                </div>
+            `;
+        }
+
+        function createPostHTML(post) {
+            const typeLabels = {
+                'news': '📰 News',
+                'videos': '🎥 Video', 
+                'pictures': '🖼️ Picture',
+                'news-pictures': '📸 News + Pic'
+            };
+
+            const priorityEmojis = {
+                'urgent': '🔥',
+                'high': '⭐',
+                'normal': ''
+            };
+
+            return `
+                <div class="post ${post.priority}">
+                    <div class="post-header">
+                        <span class="post-type ${post.priority}">
+                            ${typeLabels[currentTab]} ${priorityEmojis[post.priority]}
+                        </span>
+                        <span class="post-date">${formatDate(post.date)}</span>
+                    </div>
+                    <div class="post-content">
+                        <h3 class="post-title">${post.title}</h3>
+                        ${post.description ? `<p class="post-text">${post.description}</p>` : ''}
+                        ${post.mediaUrl ? createMediaHTML(post.mediaUrl, currentTab) : ''}
+                    </div>
+                    <div class="post-actions">
+                        <div class="like-dislike">
+                            <button class="action-btn ${post.userLiked ? 'liked' : ''}" onclick="toggleLike(${post.id})">
+                                👍 ${post.likes}
+                            </button>
+                            <button class="action-btn ${post.userDisliked ? 'disliked' : ''}" onclick="toggleDislike(${post.id})">
+                                👎 ${post.dislikes}
+                            </button>
+                        </div>
+                        <div class="post-stats">
+                            <div class="stat-item">
+                                <span>👁️</span>
+                                <span>${formatNumber(post.views)}</span>
+                            </div>
+                            <button class="action-btn share" onclick="sharePost(${post.id})">
+                                📤 Share
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function createMediaHTML(url, type) {
+            if (type === 'videos') {
+                return `<video class="post-media" controls preload="metadata" poster="https://picsum.photos/800/450?random=video">
+                    <source src="${url}" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>`;
+            } else {
+                return `<img class="post-media" src="${url}" alt="Media content" loading="lazy" onclick="openImageModal('${url}')">`;
+            }
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const diffTime = Math.abs(now - date);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            if (diffDays === 1) return 'Today';
+            if (diffDays === 2) return 'Yesterday';
+            if (diffDays <= 7) return `${diffDays - 1} days ago`;
+            
+            return date.toLocaleDateString() + ', ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        }
+
+        function formatNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return num.toString();
+        }
+
+        // Engagement functions
+        async function toggleLike(postId) {
+            const post = findPostById(postId);
+            if (!post) return;
+
+            const wasLiked = post.userLiked;
+            const wasDisliked = post.userDisliked;
+
+            try {
+                // Optimistic update
+                if (post.userLiked) {
+                    post.userLiked = false;
+                    post.likes--;
+                } else {
+                    if (post.userDisliked) {
+                        post.userDisliked = false;
+                        post.dislikes--;
+                    }
+                    post.userLiked = true;
+                    post.likes++;
+                }
+
+                renderPosts();
+
+                // In production, send to server
+                // await fetch(`${API_ENDPOINTS.like}`, {
+                //     method: 'POST',
+                //     headers: { 'Content-Type': 'application/json' },
+                //     body: JSON.stringify({ postId, action: 'like', userId: tg?.initDataUnsafe?.user?.id })
+                // });
+
+                showNotification(post.userLiked ? 'Liked! ❤️' : 'Like removed');
+
+            } catch (error) {
+                // Revert on error
+                post.userLiked = wasLiked;
+                post.userDisliked = wasDisliked;
+                post.likes += wasLiked ? 1 : -1;
+                if (wasDisliked) post.dislikes++;
+                renderPosts();
+                showNotification('Failed to update like. Please try again.', 'error');
+            }
+        }
+
+        async function toggleDislike(postId) {
+            const post = findPostById(postId);
+            if (!post) return;
+
+            const wasLiked = post.userLiked;
+            const wasDisliked = post.userDisliked;
+
+            try {
+                // Optimistic update
+                if (post.userDisliked) {
+                    post.userDisliked = false;
+                    post.dislikes--;
+                } else {
+                    if (post.userLiked) {
+                        post.userLiked = false;
+                        post.likes--;
+                    }
+                    post.userDisliked = true;
+                    post.dislikes++;
+                }
+
+                renderPosts();
+
+                // In production, send to server
+                // await fetch(`${API_ENDPOINTS.like}`, {
+                //     method: 'POST',
+                //     headers: { 'Content-Type': 'application/json' },
+                //     body: JSON.stringify({ postId, action: 'dislike', userId: tg?.initDataUnsafe?.user?.id })
+                // });
+
+                showNotification(post.userDisliked ? 'Feedback noted 👎' : 'Feedback removed');
+
+            } catch (error) {
+                // Revert on error
+                post.userLiked = wasLiked;
+                post.userDisliked = wasDisliked;
+                post.dislikes += wasDisliked ? 1 : -1;
+                if (wasLiked) post.likes++;
+                renderPosts();
+                showNotification('Failed to update feedback. Please try again.', 'error');
+            }
+        }
+
+        function sharePost(postId) {
+            const post = findPostById(postId);
+            if (!post) return;
+
+            // Increment view count
+            post.views = (post.views || 0) + 1;
+            renderPosts();
+
+            if (tg) {
+                tg.showPopup({
+                    title: 'Share Content',
+                    message: `Share "${post.title}" with your friends?`,
+                    buttons: [
+                        {id: 'share', type: 'default', text: 'Share to Chat'},
+                        {id: 'copy', type: 'default', text: 'Copy Link'},
+                        {id: 'cancel', type: 'cancel'}
+                    ]
+                }, (buttonId) => {
+                    if (buttonId === 'share') {
+                        // Generate share text for Telegram
+                        const shareText = `📢 ${post.title}\n\n${post.description ? post.description.substring(0, 100) + '...' : ''}\n\n🔗 Check it out in our channel!`;
+                        tg.switchInlineQuery(shareText);
+                    } else if (buttonId === 'copy') {
+                        // Copy link to clipboard
+                        const shareUrl = `${window.location.href}?post=${postId}`;
+                        navigator.clipboard.writeText(shareUrl).then(() => {
+                            showNotification('Link copied to clipboard! 📋');
+                        });
+                    }
+                });
+            } else {
+                if (navigator.share) {
+                    navigator.share({
+                        title: post.title,
+                        text: post.description,
+                        url: window.location.href
+                    });
+                } else {
+                    const shareUrl = `${window.location.href}?post=${postId}`;
+                    navigator.clipboard.writeText(shareUrl).then(() => {
+                        showNotification('Link copied to clipboard! 📋');
+                    });
+                }
+            }
+        }
+
+        function findPostById(id) {
+            for (let category in posts) {
+                const post = posts[category].find(p => p.id === id);
+                if (post) return post;
+            }
+            return null;
+        }
+
+        function showNotification(message, type = 'success') {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = `notification ${type}`;
+            notification.classList.add('show');
+
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        function openImageModal(imageUrl) {
+            if (tg) {
+                tg.showPopup({
+                    title: 'Image Options',
+                    message: 'What would you like to do with this image?',
+                    buttons: [
+                        {id: 'view', type: 'default', text: 'View Full Size'},
+                        {id: 'save', type: 'default', text: 'Save Image'},
+                        {id: 'cancel', type: 'cancel'}
+                    ]
+                }, (buttonId) => {
+                    if (buttonId === 'view') {
+                        window.open(imageUrl, '_blank');
+                    } else if (buttonId === 'save') {
+                        const link = document.createElement('a');
+                        link.href = imageUrl;
+                        link.download = 'image.jpg';
+                        link.click();
+                    }
+                });
+            } else {
+                window.open(imageUrl, '_blank');
+            }
+        }
+
+        // Auto-refresh content
+        function startAutoRefresh() {
+            setInterval(async () => {
+                try {
+                    // In production, check for new content from server
+                    // const response = await fetch(`${API_ENDPOINTS.posts}?since=${lastUpdateTime.toISOString()}`);
+                    // const newPosts = await response.json();
+                    
+                    // For demo, simulate new content occasionally
+                    if (Math.random() < 0.1) { // 10% chance
+                        simulateNewContent();
+                    }
+                    
+                    // Update view counts randomly
+                    updateViewCounts();
+                    
+                } catch (error) {
+                    console.error('Auto-refresh error:', error);
+                }
+            }, 30000); // Every 30 seconds
+        }
+
+        function simulateNewContent() {
+            const categories = ['news', 'videos', 'pictures', 'news-pictures'];
+            const randomCategory = categories[Math.floor(Math.random() * categories.length)];
+            
+            const newPost = {
+                id: Date.now(),
+                title: "🆕 Fresh Content Alert!",
+                description: "New content has been added to keep you updated with the latest information.",
+                date: new Date().toISOString(),
+                likes: Math.floor(Math.random() * 10),
+                dislikes: Math.floor(Math.random() * 2),
+                userLiked: false,
+                userDisliked: false,
+                views: Math.floor(Math.random() * 50),
+                priority: 'normal'
+            };
+
+            if (randomCategory === 'videos' || randomCategory === 'pictures' || randomCategory === 'news-pictures') {
+                newPost.mediaUrl = randomCategory === 'videos' 
+                    ? "https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4"
+                    : `https://picsum.photos/800/600?random=${Date.now()}`;
+            }
+
+            posts[randomCategory].unshift(newPost);
+            
+            if (currentTab === randomCategory) {
+                renderPosts();
+            }
+            
+            showNotification('New content available! 🆕');
+        }
+
+        function updateViewCounts() {
+            let updated = false;
+            for (let category in posts) {
+                posts[category].forEach(post => {
+                    if (Math.random() < 0.15) { // 15% chance per post
+                        post.views = (post.views || 0) + Math.floor(Math.random() * 5) + 1;
+                        updated = true;
+                    }
+                });
+            }
+            
+            if (updated && !isLoading) {
+                renderPosts();
+            }
+        }
+
+        // Handle deep links (for shared posts)
+        function handleDeepLink() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const postId = urlParams.get('post');
+            
+            if (postId) {
+                const post = findPostById(parseInt(postId));
+                if (post) {
+                    // Find which category the post belongs to
+                    for (let category in posts) {
+                        if (posts[category].find(p => p.id === parseInt(postId))) {
+                            switchTab(category);
+                            // Scroll to post (simplified)
+                            setTimeout(() => {
+                                const postElement = document.querySelector(`[onclick*="${postId}"]`)?.closest('.post');
+                                if (postElement) {
+                                    postElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    postElement.style.animation = 'pulse 2s ease-in-out';
+                                }
+                            }, 100);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Initialize the app
+        async function initializeApp() {
+            try {
+                await loadPosts();
+                handleDeepLink();
+                startAutoRefresh();
+                
+                // Set Telegram theme
+                if (tg) {
+                    document.documentElement.style.setProperty('--tg-theme-bg-color', tg.themeParams.bg_color || '#ffffff');
+                    document.documentElement.style.setProperty('--tg-theme-text-color', tg.themeParams.text_color || '#000000');
+                    document.documentElement.style.setProperty('--tg-theme-hint-color', tg.themeParams.hint_color || '#999999');
+                    document.documentElement.style.setProperty('--tg-theme-link-color', tg.themeParams.link_color || '#007bff');
+                    document.documentElement.style.setProperty('--tg-theme-button-color', tg.themeParams.button_color || '#007bff');
+                    document.documentElement.style.setProperty('--tg-theme-secondary-bg-color', tg.themeParams.secondary_bg_color || '#f8f9fa');
+                }
+                
+            } catch (error) {
+                console.error('App initialization error:', error);
+                showNotification('Failed to load content. Please refresh the page.', 'error');
+            }
+        }
+
+        // Start the app
+        initializeApp();
+    </script>
+</body>
+</html>
